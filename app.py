@@ -4,8 +4,12 @@ import PyPDF2
 from groq import Groq
 import requests
 import smtplib
-
-
+from fpdf import FPDF
+from langchain.prompts import PromptTemplate
+from langchain.chains import LLMChain
+import matplotlib.pyplot as plt
+import numpy as np
+import requests
 client = Groq(api_key="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")
 
 
@@ -35,17 +39,25 @@ def process_with_groq(text_chunks, task_type):
             results.append(f"Error: {str(e)}")
     return " ".join(results)
 
+st.title("📜 Legal Document Assistant")
+st.markdown("""
+**Welcome to the Enhanced Legal Document Assistant!**  
+- 📜 Provide readable legal summaries
+- 📑 Extract key clauses from legal documents  
+- ⚖️ Detect potential legal risks  
+- 📰 Track regulatory updates  
+- ✉️ Send summaries directly via email
+- ❓ Ask Questions Based on the Summary 
+""")
 
+st.sidebar.title("📁 Options")
+uploaded_files = st.sidebar.file_uploader(
+    "Upload PDFs or Text Files", type=["pdf", "txt"], accept_multiple_files=True
+)
+tasks = st.sidebar.multiselect(
+    "Choose Tasks", [ "Summarize","Extract Clauses", "Risk Detection", "Regulatory Update Tracker"]
+)
 
-RISK_KEYWORDS = [
-    "penalty", "breach", "liability", "default", "hidden obligations",
-    "indemnity", "terms of service", "non-compliance", "force majeure"
-]
-
-REGULATORY_UPDATES = [
-    {"name": "GDPR", "last_updated": "2023-12-01", "description": "General Data Protection Regulation updates on user consent."},
-   
-]
 #  detecting risk 
 
 RISK_KEYWORDS = [
@@ -85,66 +97,106 @@ def detect_risks(text_chunks):
     return risks_found
 
 
-#  REGULATORY_UPDATES
+import spacy
 
-REGULATORY_UPDATES = [
-    {"name": "GDPR", "last_updated": "2023-12-01", "description": "General Data Protection Regulation updates on user consent."},
+# Load spaCy's English model
+try:
+    nlp = spacy.load("en_core_web_sm")
+except OSError:
+    import os
+    os.system("python -m spacy download en_core_web_sm")
+    nlp = spacy.load("en_core_web_sm")
 
-]
+# Regulatory updates and categories
 REGULATORY_UPDATES = [
     {
-        'name': 'GDPR Compliance',
-        'description': 'General Data Protection Regulation compliance requirements.',
-        'last_updated': '2024-01-01',
-        'status': 'Pending'
+        "name": "GDPR",
+        "last_updated": "2023-12-01",
+        "description": "General Data Protection Regulation updates on user consent.",
+        "status": "Compliant",  
     },
     {
-        'name': 'PCI DSS',
-        'description': 'Payment Card Industry Data Security Standard compliance.',
-        'last_updated': '2023-11-01',
-        'status': 'Completed'
-    }
-    
+        "name": "PCI DSS",
+        "last_updated": "2024-01-01",
+        "description": "Payment Card Industry Data Security Standard updates for credit card transactions.",
+        "status": "Pending Review", 
+    },
+]
+
+REGULATORY_CATEGORIES = [
+    {
+        "category": "Data Privacy",
+        "keywords": ["personal data", "user consent", "data breach", "GDPR", "data protection"],
+        "description": "Regulations related to user data privacy and protection.",
+    },
+    {
+        "category": "Financial Compliance",
+        "keywords": ["payment card", "PCI DSS", "credit card security", "financial transactions"],
+        "description": "Regulations related to financial data security and transactions.",
+    },
+    {
+        "category": "Health Information Compliance",
+        "keywords": ["HIPAA", "health records", "patient data", "medical privacy"],
+        "description": "Regulations related to the security and privacy of health information.",
+    },
 ]
 
 def check_regulatory_compliance(text_chunks):
     compliance_issues = []
+
     for chunk in text_chunks:
+        # Check for regulatory updates
         for update in REGULATORY_UPDATES:
-            if update['name'].lower() in chunk.lower():
-                # Adding regulatory update status and last updated date
+            if update["name"].lower() in chunk.lower():
+                # Safely handle missing keys with .get()
                 compliance_issues.append(
                     f"Regulatory Update Detected: {update['name']} - {update['description']}\n"
-                    f"Status: {update['status']} | Last Updated: {update['last_updated']}"
+                    f"Status: {update.get('status', 'Unknown')} | Last Updated: {update.get('last_updated', 'N/A')}"
                 )
+    
+    # Add a fallback message if no updates are found
+    if not compliance_issues:
+        compliance_issues.append("No regulatory issues detected.")
+
     return compliance_issues
 
+def check_regulatory_compliance_with_nlp(text_chunks):
+    compliance_issues = []
+    
+    for chunk in text_chunks:
+        doc = nlp(chunk)
+        for category in REGULATORY_CATEGORIES:
+            for keyword in category["keywords"]:
+                if keyword.lower() in doc.text.lower():
+                    compliance_issues.append(
+                        f"Detected Regulatory Category: {category['category']} - {category['description']}"
+                    )
+    
+    # Add a fallback message if no categories are matched
+    if not compliance_issues:
+        compliance_issues.append("No regulatory categories detected.")
+    
+    return compliance_issues
+
+# Sample text chunks
 text_chunks = [
     "We need to review GDPR Compliance for the upcoming year.",
-    "The new PCI DSS standards have been implemented."
+    "The new PCI DSS standards have been implemented.",
+    "Ensure user consent aligns with GDPR regulations.",
 ]
 
+# Check both regulatory updates and categories
 compliance_issues = check_regulatory_compliance(text_chunks)
+category_issues = check_regulatory_compliance_with_nlp(text_chunks)
+
+# Print the results
+print("=== Regulatory Updates ===")
 for issue in compliance_issues:
     print(issue)
 
-st.title("📜 Legal Document Assistant with Risk Detection & Regulatory Update Tracker")
-st.markdown("""
-**Welcome to the Enhanced Legal Document Assistant!**  
-- 📑 Extract key clauses from legal documents  
-- 📜 Provide readable legal summaries  
-- ⚖️ Detect potential legal risks  
-- 📰 Track regulatory updates  
-- ✉️ Send summaries directly via email  
-""")
-
-st.sidebar.title("Options")
-uploaded_files = st.sidebar.file_uploader(
-    "Upload PDFs or Text Files", type=["pdf", "txt"], accept_multiple_files=True
-)
-tasks = st.sidebar.multiselect(
-    "Choose Tasks", ["Extract Clauses", "Summarize", "Risk Detection", "Regulatory Update Tracker"]
-)
+print("\n=== Regulatory Categories ===")
+for issue in category_issues:
+    print(issue)
 
 # Initialize an empty dictionary to store generated summaries
 generated_summaries = {}
@@ -174,12 +226,44 @@ def process_file(file, selected_tasks):
 if uploaded_files and tasks:
     st.write("🔄 Processing documents... Please wait.")
     combined_results = {}
+    progress_chart = st.empty()
+    progress_bar = st.progress(0)
+
+    file_count = len(uploaded_files)
+    task_count = len(tasks)
+    total_steps = file_count * task_count
+    step = 0
 
     for file in uploaded_files:
-        st.write(f"Processing: {file.name}")
+        # st.write(f"Processing: {file.name}")
         combined_results[file.name] = process_file(file, tasks)
+        if file.type == "application/pdf":
+            for page_text in extract_text_from_pdf(file):
+                text_chunks.extend(split_text_into_chunks(page_text))
+        else:
+            text = file.read().decode("utf-8")
+            text_chunks = split_text_into_chunks(text)
 
-    st.success("🎉 All tasks completed!")
+        for task in tasks:
+            step += 1
+            task_result = process_with_groq(text_chunks, task)
+            # st.text_area(f"Result for {task} in {file.name}:", task_result, height=200)
+
+            progress = int((step / total_steps) * 100)
+            progress_bar.progress(progress)
+             # Update progress chart
+            plt.figure(figsize=(8, 4))
+            progress_values = np.linspace(0, progress, 10)
+            plt.plot(progress_values, color="blue", marker="o")
+            plt.title("Processing Progress")
+            plt.xlabel("Steps")
+            plt.ylabel("Progress (%)")
+            plt.grid(True)
+            progress_chart.pyplot(plt)
+
+       
+        
+    st.success("🎉 All tasks proceeded successfully!")
 
     # Display results and allow downloading
     for file_name, results in combined_results.items():
@@ -226,7 +310,6 @@ To: {receiver_email}
 Subject: {email_subject}\n
 Please find the attached PDF summary for your review.
 """
-            
            
             with open(pdf_filename, "rb") as pdf_file:
                 attachment = pdf_file.read()
@@ -263,6 +346,8 @@ Please find the attached PDF summary for your review.
             st.success("📧 Email sent successfully with the attached PDF!")
         except Exception as e:
             st.error(f"Failed to send email: {str(e)}")
+from langchain.chains import ConversationalRetrievalChain
+
 def answer_question_with_summary(summary, question):
     """
     Generate an answer to a user's question based on the provided summary.
