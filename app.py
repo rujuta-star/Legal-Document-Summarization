@@ -39,7 +39,7 @@ def process_with_groq(text_chunks, task_type):
             results.append(f"Error: {str(e)}")
     return " ".join(results)
 
-st.title("📜 Legal Document Assistant")
+st.title("📜 Advanced AI-Driven Legal Document Summarization and Risk Assessment")
 st.markdown("""
 **Welcome to the Enhanced Legal Document Assistant!**  
 - 📜 Provide readable legal summaries
